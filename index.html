@@ -484,24 +484,29 @@ async function sendMessage() {
   if (!content || isTyping) return;
   isTyping = true;
   document.getElementById('sendBtn').disabled = true;
+  
+  // 입력창 즉시 완전히 비우기
   input.value = '';
+  input.style.height = 'auto';
 
   const userMsg = { agent_id: currentAgent.id, role: 'user', content, created_at: new Date().toISOString() };
   await sb.from('conversations').insert(userMsg);
   conversations[currentAgent.id].push(userMsg);
   renderMessages();
 
-  // 내 메시지가 화면 상단에 오도록 스크롤
-  requestAnimationFrame(() => {
+  // 내 메시지를 화면 상단으로 올리기 (클로드 앱 방식)
+  setTimeout(() => {
     const m = document.getElementById("messages");
     if (!m) return;
-    const msgs = m.querySelectorAll('.msg.user');
-    const lastUserMsg = msgs[msgs.length - 1];
+    const userMsgs = m.querySelectorAll('.msg.user');
+    const lastUserMsg = userMsgs[userMsgs.length - 1];
     if (lastUserMsg) {
-      lastUserMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const offsetTop = lastUserMsg.offsetTop - 16;
+      m.scrollTo({ top: offsetTop, behavior: 'smooth' });
     }
-  });
+  }, 50);
 
+  // 타이핑 인디케이터 추가
   const typingDiv = document.createElement('div');
   typingDiv.className = 'msg assistant'; typingDiv.id = 'typingIndicator';
   typingDiv.innerHTML = `<div class="msg-avatar" style="background:${currentAgent.color}20;color:${currentAgent.color}">${currentAgent.name[0]}</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
@@ -527,16 +532,19 @@ async function sendMessage() {
 
   document.getElementById('typingIndicator')?.remove();
   renderMessages();
-  // 답변 완료 후 assistant 메시지 상단으로
-  requestAnimationFrame(() => {
+
+  // 답변 완료 후 assistant 답변 상단으로
+  setTimeout(() => {
     const m = document.getElementById("messages");
     if (!m) return;
     const allMsgs = m.querySelectorAll('.msg.assistant');
     const lastAssistant = allMsgs[allMsgs.length - 1];
     if (lastAssistant) {
-      lastAssistant.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const offsetTop = lastAssistant.offsetTop - 16;
+      m.scrollTo({ top: offsetTop, behavior: 'smooth' });
     }
-  });
+  }, 50);
+
   renderSidebar();
   isTyping = false;
   document.getElementById('sendBtn').disabled = false;
