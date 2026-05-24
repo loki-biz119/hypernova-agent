@@ -266,7 +266,7 @@ function renderMessages() {
         <div class="msg-time">${new Date(msg.created_at).toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'})}</div>
       </div>
     </div>`).join('');
-  container.scrollTop = container.scrollHeight;
+  requestAnimationFrame(() => { container.scrollTo({ top: container.scrollHeight, behavior: "smooth" }); });
 }
 
 async function sendMessage() {
@@ -286,7 +286,7 @@ async function sendMessage() {
   typingDiv.className = 'msg assistant'; typingDiv.id = 'typingIndicator';
   typingDiv.innerHTML = `<div class="msg-avatar" style="background:${currentAgent.color}20;color:${currentAgent.color}">${currentAgent.name[0]}</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
   document.getElementById('messages').appendChild(typingDiv);
-  document.getElementById('messages').scrollTop = 99999;
+  requestAnimationFrame(() => { const m = document.getElementById("messages"); if(m) m.scrollTo({ top: m.scrollHeight, behavior: "smooth" }); });
 
   const history = conversations[currentAgent.id].slice(-20).map(m => ({ role: m.role, content: m.content }));
 
