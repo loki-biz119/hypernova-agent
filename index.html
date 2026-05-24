@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HYPERNOVA — AI Agent Group</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f; --bg2: #111118; --bg3: #18181f;
+    --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
+    --text: #f0f0f5; --muted: rgba(240,240,245,0.45); --accent: #7c6fff;
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 20px 32px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: 0.08em; }
+  .logo span { color: var(--accent); }
+  .header-sub { font-size: 12px; color: var(--muted); letter-spacing: 0.05em; }
+  .app { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 61px); }
+  .sidebar { width: 280px; flex-shrink: 0; border-right: 0.5px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-label { padding: 16px 20px 10px; font-size: 10px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; font-weight: 500; }
+  .agent-list { flex: 1; overflow-y: auto; padding: 0 10px 10px; }
+  .agent-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; cursor: pointer; transition: background 0.15s; border: 0.5px solid transparent; margin-bottom: 3px; }
+  .agent-item:hover { background: var(--bg3); }
+  .agent-item.active { background: var(--bg3); border-color: var(--border2); }
+  .agent-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .agent-item-info { flex: 1; min-width: 0; }
+  .agent-item-name { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agent-item-role { font-size: 11px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg-count { font-size: 10px; color: var(--muted); background: var(--bg2); padding: 2px 7px; border-radius: 20px; border: 0.5px solid var(--border); flex-shrink: 0; }
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .org-view { flex: 1; overflow-y: auto; padding: 40px 32px; }
+  .org-title { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; margin-bottom: 6px; }
+  .org-title span { color: var(--accent); }
+  .org-sub { font-size: 14px; color: var(--muted); margin-bottom: 40px; }
+  .ceo-node { display: flex; align-items: center; gap: 16px; padding: 16px 24px; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 14px; width: fit-content; margin: 0 auto; }
+  .ceo-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #a78bff); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; }
+  .ceo-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
+  .ceo-role { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .connector { width: 0.5px; height: 28px; background: var(--border2); margin: 0 auto; }
+  .connector-h { display: flex; align-items: flex-start; justify-content: center; position: relative; }
+  .connector-h::before { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%); height: 0.5px; background: var(--border2); width: 85%; }
+  .agents-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 16px; }
+  .agent-card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: 14px; padding: 20px; cursor: pointer; transition: border-color 0.15s, background 0.15s, transform 0.15s; position: relative; }
+  .agent-card:hover { border-color: var(--border2); background: var(--bg3); transform: translateY(-2px); }
+  .agent-num { font-size: 10px; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 10px; font-family: 'Syne', sans-serif; }
+  .agent-card-name { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .agent-card-role { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.4; }
+  .agent-card-desc { font-size: 12px; color: var(--muted); line-height: 1.6; border-top: 0.5px solid var(--border); padding-top: 12px; }
+  .chat-btn { margin-top: 14px; width: 100%; padding: 8px; border-radius: 8px; border: 0.5px solid var(--border2); background: transparent; color: var(--text); font-size: 12px; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: background 0.15s; }
+  .chat-btn:hover { background: var(--bg3); }
+  .chat-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .chat-header { padding: 16px 24px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .back-btn { padding: 6px 12px; border-radius: 8px; border: 0.5px solid var(--border2); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.15s, color 0.15s; }
+  .back-btn:hover { background: var(--bg3); color: var(--text); }
+  .chat-agent-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
+  .chat-agent-role { font-size: 12px; color: var(--muted); }
+  .messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { display: flex; gap: 10px; max-width: 80%; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg.assistant { align-self: flex-start; }
+  .msg-avatar { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-family: 'Syne', sans-serif; font-weight: 700; }
+  .msg.user .msg-avatar { background: linear-gradient(135deg, var(--accent), #a78bff); color: white; }
+  .msg-bubble { padding: 12px 16px; border-radius: 14px; font-size: 14px; line-height: 1.6; }
+  .msg.user .msg-bubble { background: var(--accent); color: white; border-radius: 14px 4px 14px 14px; }
+  .msg.assistant .msg-bubble { background: var(--bg3); border: 0.5px solid var(--border); border-radius: 4px 14px 14px 14px; }
+  .msg-time { font-size: 10px; color: var(--muted); margin-top: 4px; text-align: right; }
+  .msg.assistant .msg-time { text-align: left; }
+  .typing { display: flex; gap: 5px; align-items: center; padding: 14px 16px; }
+  .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
+  .input-area { padding: 16px 24px; border-top: 0.5px solid var(--border); display: flex; gap: 10px; flex-shrink: 0; }
+  .input-area textarea { flex: 1; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 12px; padding: 12px 16px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; resize: none; outline: none; min-height: 48px; max-height: 120px; line-height: 1.5; }
+  .input-area textarea:focus { border-color: var(--accent); }
+  .input-area textarea::placeholder { color: var(--muted); }
+  .send-btn { width: 48px; height: 48px; border-radius: 12px; border: none; background: var(--accent); color: white; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: opacity 0.15s; flex-shrink: 0; }
+  .send-btn:hover { opacity: 0.85; }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .empty-chat { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
+  .empty-chat-text { font-size: 14px; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* Config modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal { background: var(--bg2); border: 0.5px solid var(--border2); border-radius: 16px; padding: 32px; width: 460px; max-width: 90vw; }
+  .modal h2 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .modal p { font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+  .modal label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; letter-spacing: 0.05em; }
+  .modal input { width: 100%; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 8px; padding: 10px 14px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none; margin-bottom: 16px; }
+  .modal input:focus { border-color: var(--accent); }
+  .modal-btn { width: 100%; padding: 12px; border-radius: 10px; border: none; background: var(--accent); color: white; font-size: 14px; font-family: 'Syne', sans-serif; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+  .modal-btn:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">HYPER<span>NOVA</span></div>
+  <div class="header-sub">AI AGENT GROUP · CEO 김명수</div>
+</header>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-label">에이전트</div>
+    <div class="agent-list" id="agentList"></div>
+  </div>
+  <div class="main" id="mainArea"></div>
+</div>
+
+<!-- Config Modal -->
+<div class="modal-overlay" id="configModal">
+  <div class="modal">
+    <h2>HYPERNOVA 설정</h2>
+    <p>Claude API 키를 입력하세요. 키는 브라우저에만 저장되며 서버로 전송되지 않습니다.</p>
+    <label>CLAUDE API KEY</label>
+    <input type="password" id="claudeKeyInput" placeholder="sk-ant-api03-..." />
+    <button class="modal-btn" onclick="saveConfig()">저장하고 시작하기</button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://vjohqcomwsbyqcydxoiu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqb2hxY29td3NieXFjeWR4b2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1OTM5NzQsImV4cCI6MjA5NTE2OTk3NH0.8CbRr7QhZQ0NSfxl15T7K-8kCnOEK3KLxv38PL_jGF8';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let CLAUDE_KEY = '';
+
+function saveConfig() {
+  const key = document.getElementById('claudeKeyInput').value.trim();
+  if (!key.startsWith('sk-ant-')) { alert('올바른 Claude API 키를 입력하세요'); return; }
+  localStorage.setItem('hypernova_claude_key', key);
+  CLAUDE_KEY = key;
+  document.getElementById('configModal').style.display = 'none';
+  init();
+}
+
+function checkConfig() {
+  const saved = localStorage.getItem('hypernova_claude_key');
+  if (saved) { CLAUDE_KEY = saved; document.getElementById('configModal').style.display = 'none'; init(); }
+}
+
+const AGENTS = [
+  { id: 'osinun', name: '오늘의신선', role: '코스트코 장보기 대행', desc: '강남권 당일배달 전략, SNS 운영, 고객확보, 수익모델 설계', color: '#4ade80',
+    system: '당신은 오늘의신선 전담 AI 파트너입니다. 코스트코 장보기 대행 서비스(강남·서초·송파·강동·위례·과천)를 운영합니다. 양재 코스트코 기반 당일배달, 스레드 계정 운영, 카카오채널 활용, 카페사장·아기엄마 타겟 고객확보, 수익모델(건당 수수료), SNS 콘텐츠 전략에 대해 전문적으로 조언합니다. 경쟁사가 대부분 철수한 상황에서 신선식품 큐레이션 전문가 포지셔닝 전략을 함께 구상합니다.' },
+  { id: 'wigihoe', name: '위기회', role: '개인 브랜딩 & SNS', desc: '김명수 개인 인생스토리, 팔로워 성장 전략, 퍼스널 브랜딩', color: '#f472b6',
+    system: '당신은 위기회 계정 전담 AI 파트너입니다. 위기회는 김명수님의 개인 인생스토리 SNS 계정입니다. AI시대 1인 혁신가로서의 여정, 창업 스토리, 성장 과정을 콘텐츠화하여 팔로워를 키우는 전략을 담당합니다. 퍼스널 브랜딩, 스토리텔링, SNS 알고리즘, 콘텐츠 기획에 대해 조언합니다. 최종 목표는 전 세계 천만명 팔로워 창출입니다.' },
+  { id: 'youtube', name: '유튜브숏츠', role: '숏츠 수익화', desc: '숏폼 콘텐츠 제작, 수익화 전략, 조회수 성장, 채널 운영', color: '#fb923c',
+    system: '당신은 유튜브 숏츠 수익화 전담 AI 파트너입니다. 숏폼 콘텐츠로 유튜브 수익화를 목표로 합니다. 바이럴 콘텐츠 기획, 숏츠 알고리즘 최적화, 수익화 조건 달성 전략, 콘텐츠 제작 효율화에 대해 조언합니다. 1인 운영자 관점에서 최소 시간·비용으로 최대 효과를 내는 전략을 함께 구상합니다.' },
+  { id: 'stock', name: '주식투자', role: '시스템 트레이딩', desc: '맞춤형 투자 프레임워크, 시장조사, 차트학습, 자동화 트레이딩', color: '#a78bfa',
+    system: '당신은 주식투자 전담 AI 파트너입니다. 김명수님 성향에 맞춘 맞춤형 투자 프레임워크 구축을 담당합니다. 감이 아닌 데이터 기반 시스템 트레이딩, 시장조사, 차트 분석, 포트폴리오 관리에 대해 조언합니다. 목표는 전 세계 상위 1% 수익률을 1년 내 달성하는 투자 시스템 완성입니다.' },
+  { id: 'jangin', name: '장인노트', role: '플랫폼 개발 & 런칭', desc: '네이버 블로그 기반 고숙련 기능인 카탈로그, DB 분석, Vercel 배포', color: '#38bdf8',
+    system: '당신은 장인노트 전담 AI 파트너입니다. 장인노트는 네이버 블로그 기반 고숙련 기능인 카탈로그 플랫폼입니다. 슬로건: "현장 기능인은 현장 기록으로 선택하세요". 현황: 블로그 DB 2385개 수집완료, 유력 1046개 Claude API 분석 진행중. jangin_main.html, jangin_results.html 완성, Vercel 배포 예정. 서비스 개발, SNS 전략, 데이터 파이프라인, 수익모델에 대해 조언합니다.' },
+  { id: 'loki', name: '로키', role: '창업레이더 개발', desc: '창업/폐업 데이터 인텔리전스, 공공데이터 파이프라인, B2B 수익화', color: '#fbbf24',
+    system: '당신은 로키(창업레이더) 전담 AI 파트너입니다. "창업 전 시장 동향을 주식 시세처럼" 포지셔닝: "죽은 가게에서 배우는 창업 인텔리전스". 국세청+소상공인진흥공단 공공데이터로 업종/지역별 창업률·폐업률 대시보드를 구축합니다. 데이터 파이프라인, 수익모델(무료→유료리포트→B2B), SNS 전략에 대해 조언합니다.' }
+];
+
+let currentAgent = null;
+let conversations = {};
+let msgCounts = {};
+let isTyping = false;
+
+async function init() {
+  await loadMsgCounts();
+  renderSidebar();
+  renderOrgView();
+}
+
+async function loadMsgCounts() {
+  for (const agent of AGENTS) {
+    const { count } = await sb.from('conversations').select('*', { count: 'exact', head: true }).eq('agent_id', agent.id);
+    msgCounts[agent.id] = count || 0;
+  }
+}
+
+function renderSidebar() {
+  const list = document.getElementById('agentList');
+  list.innerHTML = AGENTS.map((agent, i) => `
+    <div class="agent-item ${currentAgent?.id === agent.id ? 'active' : ''}" onclick="openChat(AGENTS[${i}])">
+      <div class="agent-dot" style="background:${agent.color}"></div>
+      <div class="agent-item-info">
+        <div class="agent-item-name">${agent.name}</div>
+        <div class="agent-item-role">${agent.role}</div>
+      </div>
+      ${msgCounts[agent.id] > 0 ? `<div class="msg-count">${msgCounts[agent.id]}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderOrgView() {
+  document.getElementById('mainArea').innerHTML = `
+    <div class="org-view">
+      <div class="org-title">HYPER<span>NOVA</span></div>
+      <div class="org-sub">AI 에이전트 조직도 · 에이전트를 클릭해서 대화를 시작하세요</div>
+      <div style="max-width:780px;margin:0 auto;">
+        <div style="display:flex;justify-content:center;">
+          <div class="ceo-node">
+            <div class="ceo-avatar">KM</div>
+            <div><div class="ceo-name">김명수 CEO</div><div class="ceo-role">1인 혁신가 · AI 오케스트레이터</div></div>
+          </div>
+        </div>
+        <div class="connector"></div>
+        <div class="connector-h">${AGENTS.map(() => `<div style="flex:1;"><div class="connector"></div></div>`).join('')}</div>
+        <div class="agents-grid">
+          ${AGENTS.map((agent, i) => `
+            <div class="agent-card" onclick="openChat(AGENTS[${i}])" style="border-top:2px solid ${agent.color}40;">
+              <div class="agent-num">0${i+1}</div>
+              <div class="agent-card-name" style="color:${agent.color}">${agent.name}</div>
+              <div class="agent-card-role">${agent.role}</div>
+              <div class="agent-card-desc">${agent.desc}</div>
+              <button class="chat-btn" onclick="event.stopPropagation();openChat(AGENTS[${i}])">대화 시작 →</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+async function openChat(agent) {
+  currentAgent = agent;
+  renderSidebar();
+  document.getElementById('mainArea').innerHTML = `
+    <div class="chat-view">
+      <div class="chat-header">
+        <button class="back-btn" onclick="goHome()">← 조직도</button>
+        <div class="agent-dot" style="background:${agent.color};width:10px;height:10px;border-radius:50%;"></div>
+        <div><div class="chat-agent-name">${agent.name}</div><div class="chat-agent-role">${agent.role}</div></div>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="input-area">
+        <textarea id="msgInput" placeholder="${agent.name}에게 메시지를 입력하세요..." onkeydown="handleKey(event)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
+      </div>
+    </div>`;
+  await loadMessages(agent);
+}
+
+async function loadMessages(agent) {
+  const { data } = await sb.from('conversations').select('*').eq('agent_id', agent.id).order('created_at', { ascending: true });
+  conversations[agent.id] = data || [];
+  renderMessages();
+}
+
+function renderMessages() {
+  const container = document.getElementById('messages');
+  if (!container) return;
+  const msgs = conversations[currentAgent.id] || [];
+  if (msgs.length === 0) {
+    container.innerHTML = `<div class="empty-chat"><div class="empty-chat-text">💬 ${currentAgent.name}와 대화를 시작하세요</div></div>`;
+    return;
+  }
+  container.innerHTML = msgs.map(msg => `
+    <div class="msg ${msg.role}">
+      <div class="msg-avatar" style="${msg.role === 'assistant' ? `background:${currentAgent.color}20;color:${currentAgent.color}` : ''}">
+        ${msg.role === 'user' ? 'KM' : currentAgent.name[0]}
+      </div>
+      <div>
+        <div class="msg-bubble">${msg.content.replace(/\n/g, '<br>')}</div>
+        <div class="msg-time">${new Date(msg.created_at).toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+    </div>`).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendMessage() {
+  const input = document.getElementById('msgInput');
+  const content = input.value.trim();
+  if (!content || isTyping) return;
+  isTyping = true;
+  document.getElementById('sendBtn').disabled = true;
+  input.value = '';
+
+  const userMsg = { agent_id: currentAgent.id, role: 'user', content, created_at: new Date().toISOString() };
+  await sb.from('conversations').insert(userMsg);
+  conversations[currentAgent.id].push(userMsg);
+  renderMessages();
+
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'msg assistant'; typingDiv.id = 'typingIndicator';
+  typingDiv.innerHTML = `<div class="msg-avatar" style="background:${currentAgent.color}20;color:${currentAgent.color}">${currentAgent.name[0]}</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  document.getElementById('messages').appendChild(typingDiv);
+  document.getElementById('messages').scrollTop = 99999;
+
+  const history = conversations[currentAgent.id].slice(-20).map(m => ({ role: m.role, content: m.content }));
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: currentAgent.system, messages: history })
+    });
+    const data = await res.json();
+    const reply = data.content[0].text;
+    const assistantMsg = { agent_id: currentAgent.id, role: 'assistant', content: reply, created_at: new Date().toISOString() };
+    await sb.from('conversations').insert(assistantMsg);
+    conversations[currentAgent.id].push(assistantMsg);
+    msgCounts[currentAgent.id] = (msgCounts[currentAgent.id] || 0) + 2;
+  } catch(e) {
+    conversations[currentAgent.id].push({ agent_id: currentAgent.id, role: 'assistant', content: '오류가 발생했습니다. 다시 시도해주세요.', created_at: new Date().toISOString() });
+  }
+
+  document.getElementById('typingIndicator')?.remove();
+  renderMessages();
+  renderSidebar();
+  isTyping = false;
+  document.getElementById('sendBtn').disabled = false;
+}
+
+function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+function goHome() { currentAgent = null; renderSidebar(); renderOrgView(); }
+
+checkConfig();
+</script>
+</body>
+</html>
