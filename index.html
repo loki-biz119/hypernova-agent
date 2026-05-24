@@ -291,10 +291,10 @@ async function sendMessage() {
   const history = conversations[currentAgent.id].slice(-20).map(m => ({ role: m.role, content: m.content }));
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: currentAgent.system, messages: history })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: currentAgent.system, messages: history, apiKey: CLAUDE_KEY })
     });
     const data = await res.json();
     const reply = data.content[0].text;
