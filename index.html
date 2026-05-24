@@ -340,42 +340,78 @@ async function sendMessage() {
   }, 150);
 
   // 타이핑 인디케이터 추가
+  // 타이핑 인디케이터 (로딩 dots)
   const typingDiv = document.createElement('div');
-  typingDiv.className = 'msg assistant'; typingDiv.id = 'typingIndicator';
-  typingDiv.innerHTML = `<div class="msg-avatar" style="background:${currentAgent.color}20;color:${currentAgent.color}">${currentAgent.name[0]}</div><div class="msg-bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  typingDiv.className = 'msg assistant';
+  typingDiv.id = 'streamingMsg';
+  typingDiv.innerHTML = `<div class="msg-avatar" style="background:${currentAgent.color}20;color:${currentAgent.color}">${currentAgent.name[0]}</div><div class="msg-bubble" id="streamingBubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
   document.getElementById('messages').appendChild(typingDiv);
+  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 
   const history = conversations[currentAgent.id].slice(-20).map(m => ({ role: m.role, content: m.content }));
+
+  let fullReply = '';
 
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4000, system: currentAgent.system, messages: history, apiKey: CLAUDE_KEY })
+      body: JSON.stringify({ system: currentAgent.system, messages: history, apiKey: CLAUDE_KEY })
     });
-    const data = await res.json();
-    const reply = data.content[0].text;
-    const assistantMsg = { agent_id: currentAgent.id, role: 'assistant', content: reply, created_at: new Date().toISOString() };
-    await sb.from('conversations').insert(assistantMsg);
-    conversations[currentAgent.id].push(assistantMsg);
-    msgCounts[currentAgent.id] = (msgCounts[currentAgent.id] || 0) + 2;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    const bubble = document.getElementById('streamingBubble');
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.text) {
+              fullReply += parsed.text;
+              if (bubble) {
+                bubble.innerHTML = fullReply.replace(/\n/g, '<br>');
+                // 스트리밍 중 자동 스크롤
+                const m = document.getElementById('messages');
+                if (m) m.scrollTop = m.scrollHeight;
+              }
+            }
+          } catch(e) {}
+        }
+      }
+    }
+
+    // 완료 후 DB 저장
+    if (fullReply) {
+      const assistantMsg = { agent_id: currentAgent.id, role: 'assistant', content: fullReply, created_at: new Date().toISOString() };
+      await sb.from('conversations').insert(assistantMsg);
+      conversations[currentAgent.id].push(assistantMsg);
+      msgCounts[currentAgent.id] = (msgCounts[currentAgent.id] || 0) + 2;
+    }
+
   } catch(e) {
-    conversations[currentAgent.id].push({ agent_id: currentAgent.id, role: 'assistant', content: '오류가 발생했습니다. 다시 시도해주세요.', created_at: new Date().toISOString() });
+    fullReply = '오류가 발생했습니다. 다시 시도해주세요.';
+    const bubble = document.getElementById('streamingBubble');
+    if (bubble) bubble.innerHTML = fullReply;
   }
 
-  document.getElementById('typingIndicator')?.remove();
-  renderMessages();
-
-  // 답변 완료 후 답변 첫줄이 화면 상단으로
+  // 스트리밍 완료 후 답변 첫줄 상단으로
   setTimeout(() => {
-    const m = document.getElementById("messages");
-    if (!m) return;
-    const allMsgs = m.querySelectorAll('.msg.assistant');
-    const lastAssistant = allMsgs[allMsgs.length - 1];
-    if (lastAssistant) {
-      m.scrollTop = lastAssistant.offsetTop - 20;
+    const m = document.getElementById('messages');
+    const streamMsg = document.getElementById('streamingMsg');
+    if (m && streamMsg) {
+      m.scrollTop = streamMsg.offsetTop - 20;
     }
-  }, 150);
+  }, 100);
 
   renderSidebar();
   isTyping = false;
