@@ -57,7 +57,7 @@
   .back-btn:hover { background: var(--bg3); color: var(--text); }
   .chat-agent-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
   .chat-agent-role { font-size: 12px; color: var(--muted); }
-  .messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: auto; }
   .msg { display: flex; gap: 10px; max-width: 80%; }
   .msg.user { align-self: flex-end; flex-direction: row-reverse; }
   .msg.assistant { align-self: flex-start; }
@@ -276,7 +276,7 @@ async function openChat(agent) {
       </div>
       <div class="messages" id="messages"></div>
       <div class="input-area">
-        <textarea id="msgInput" placeholder="${agent.name}에게 메시지를 입력하세요..." onkeydown="handleKey(event)"></textarea>
+        <textarea id="msgInput" placeholder="${agent.name}에게 메시지를 입력하세요..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
         <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
       </div>
     </div>`;
@@ -317,27 +317,27 @@ async function sendMessage() {
   isTyping = true;
   document.getElementById('sendBtn').disabled = true;
   
-  // 입력창 즉시 완전히 비우기 (한글 조합 버그 방지)
-  input.blur();
+  // 입력창 비우기
   input.value = '';
-  input.style.height = 'auto';
-  setTimeout(() => input.focus(), 10);
+  input.style.height = '48px';
 
   const userMsg = { agent_id: currentAgent.id, role: 'user', content, created_at: new Date().toISOString() };
   await sb.from('conversations').insert(userMsg);
   conversations[currentAgent.id].push(userMsg);
   renderMessages();
 
-  // 내 메시지 상단으로 (클로드 앱 방식)
+  // 내 메시지 + 타이핑 인디케이터가 화면에 보이도록
   setTimeout(() => {
     const m = document.getElementById("messages");
     if (!m) return;
     const userMsgs = m.querySelectorAll('.msg.user');
-    const lastUserMsg = userMsgs[userMsgs.length - 1];
-    if (lastUserMsg) {
-      m.scrollTop = lastUserMsg.offsetTop - 24;
+    const last = userMsgs[userMsgs.length - 1];
+    if (last) {
+      // 내 메시지가 화면 위쪽에 오도록 (클로드 앱 방식)
+      const targetScroll = last.offsetTop - 20;
+      m.scrollTop = targetScroll;
     }
-  }, 100);
+  }, 150);
 
   // 타이핑 인디케이터 추가
   const typingDiv = document.createElement('div');
@@ -366,24 +366,38 @@ async function sendMessage() {
   document.getElementById('typingIndicator')?.remove();
   renderMessages();
 
-  // 답변 완료 후 답변 첫줄 상단으로
+  // 답변 완료 후 답변 첫줄이 화면 상단으로
   setTimeout(() => {
     const m = document.getElementById("messages");
     if (!m) return;
     const allMsgs = m.querySelectorAll('.msg.assistant');
     const lastAssistant = allMsgs[allMsgs.length - 1];
     if (lastAssistant) {
-      m.scrollTop = lastAssistant.offsetTop - 24;
+      m.scrollTop = lastAssistant.offsetTop - 20;
     }
-  }, 100);
+  }, 150);
 
   renderSidebar();
   isTyping = false;
   document.getElementById('sendBtn').disabled = false;
 }
 
-function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+let isComposing = false;
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
 function goHome() { currentAgent = null; renderSidebar(); renderOrgView(); }
+
+// 한글 조합 이벤트 처리
+document.addEventListener('compositionstart', () => { isComposing = true; });
+document.addEventListener('compositionend', () => { isComposing = false; });
 
 checkConfig();
 </script>
