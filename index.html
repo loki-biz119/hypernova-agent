@@ -266,7 +266,7 @@ function renderMessages() {
         <div class="msg-time">${new Date(msg.created_at).toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'})}</div>
       </div>
     </div>`).join('');
-  requestAnimationFrame(() => { container.scrollTo({ top: container.scrollHeight, behavior: "smooth" }); });
+  container.scrollTop = container.scrollHeight;
 }
 
 async function sendMessage() {
@@ -318,6 +318,16 @@ async function sendMessage() {
 
   document.getElementById('typingIndicator')?.remove();
   renderMessages();
+  // 답변 완료 후 assistant 메시지 상단으로
+  requestAnimationFrame(() => {
+    const m = document.getElementById("messages");
+    if (!m) return;
+    const allMsgs = m.querySelectorAll('.msg.assistant');
+    const lastAssistant = allMsgs[allMsgs.length - 1];
+    if (lastAssistant) {
+      lastAssistant.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
   renderSidebar();
   isTyping = false;
   document.getElementById('sendBtn').disabled = false;
