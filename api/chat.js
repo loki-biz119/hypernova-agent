@@ -8,10 +8,9 @@ export default async function handler(req, res) {
 
   const { messages, system, apiKey } = req.body;
 
-  // 스트리밍 헤더 설정
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+  if (!apiKey || !apiKey.startsWith('sk-ant-')) {
+    return res.status(401).json({ error: 'API 키가 유효하지 않아요' });
+  }
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -25,43 +24,20 @@ export default async function handler(req, res) {
         model: 'claude-sonnet-4-5-20251001',
         max_tokens: 4000,
         system,
-        messages,
-        stream: true
+        messages
       })
     });
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') {
-            res.write('data: [DONE]\n\n');
-            continue;
-          }
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-              res.write(`data: ${JSON.stringify({ text: parsed.delta.text })}\n\n`);
-            }
-            if (parsed.type === 'message_stop') {
-              res.write('data: [DONE]\n\n');
-            }
-          } catch(e) {}
-        }
-      }
+    if (!response.ok) {
+      const err = await response.json();
+      return res.status(response.status).json({ error: err?.error?.message || '클로드 API 오류' });
     }
-  } catch (error) {
-    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-  }
 
-  res.end();
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
+    return res.status(200).json({ text });
+
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 }
