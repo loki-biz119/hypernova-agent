@@ -469,8 +469,9 @@ async function sendMessage() {
   isTyping = true;
   document.getElementById('sendBtn').disabled = true;
 
-  // 함수 시작 시점에 에이전트 고정 (도중에 다른 에이전트 클릭해도 영향 없음)
+  // 전송 시점 에이전트 완전 고정
   const agent = currentAgent;
+  const agentId = agent.id;
 
   input.value = '';
   input.style.height = '48px';
@@ -479,13 +480,11 @@ async function sendMessage() {
   let userContent;
   if (attachedFiles.length > 0) {
     userContent = [];
-    // 이미지 먼저
     for (const f of attachedFiles) {
       if (f.type === 'image') {
         userContent.push({ type: 'image', source: { type: 'base64', media_type: f.mediaType, data: f.data } });
       }
     }
-    // 텍스트 파일은 텍스트 블록으로
     let textParts = content ? content + '\n\n' : '';
     for (const f of attachedFiles) {
       if (f.type === 'text') {
@@ -497,93 +496,95 @@ async function sendMessage() {
     userContent = content;
   }
 
-  // DB 저장용 텍스트 (파일명만 표시)
   const fileNames = attachedFiles.map(f => `[${f.name}]`).join(' ');
   const displayContent = [content, fileNames].filter(Boolean).join(' ');
-
   const filesSnapshot = [...attachedFiles];
   attachedFiles = [];
   renderAttachPreview();
 
-  const userMsg = { agent_id: agent.id, role: 'user', content: displayContent, created_at: new Date().toISOString() };
+  // DB 저장 + 로컬 추가
+  const userMsg = { agent_id: agentId, role: 'user', content: displayContent, created_at: new Date().toISOString() };
   await sb.from('conversations').insert(userMsg);
-  conversations[agent.id].push(userMsg);
-  renderMessages(agent);
+  if (!conversations[agentId]) conversations[agentId] = [];
+  conversations[agentId].push(userMsg);
 
-  // 내 메시지가 화면 상단에 오도록
-  setTimeout(() => {
-    const m = document.getElementById('messages');
-    if (!m) return;
-    const allMsgs = m.querySelectorAll('.msg.user');
-    const lastUserMsg = allMsgs[allMsgs.length - 1];
-    if (lastUserMsg) m.scrollTop = lastUserMsg.offsetTop - 16;
-  }, 80);
+  // 현재 보고 있는 에이전트가 같을 때만 DOM 업데이트
+  function isSameAgent() { return currentAgent && currentAgent.id === agentId; }
 
-  const typingDiv = document.createElement('div');
-  typingDiv.className = 'msg assistant';
-  typingDiv.id = 'streamingMsg';
-  typingDiv.innerHTML = `<div class="msg-avatar" style="background:${agent.color}20;color:${agent.color}">${agent.name[0]}</div><div class="msg-bubble" id="streamingBubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
-  document.getElementById('messages').appendChild(typingDiv);
-  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+  if (isSameAgent()) {
+    renderMessages(agent);
+    setTimeout(() => {
+      const m = document.getElementById('messages');
+      if (!m) return;
+      const userMsgs = m.querySelectorAll('.msg.user');
+      const last = userMsgs[userMsgs.length - 1];
+      if (last) m.scrollTop = last.offsetTop - 16;
+    }, 100);
+  }
 
-  // 히스토리 구성 (마지막 메시지는 멀티모달 콘텐츠로 교체)
-  const history = conversations[agent.id].slice(-20).map((m, idx, arr) => {
+  // 히스토리 구성
+  const history = conversations[agentId].slice(-20).map((m, idx, arr) => {
     if (idx === arr.length - 1 && filesSnapshot.length > 0) {
       return { role: 'user', content: userContent };
     }
     return { role: m.role, content: m.content };
   });
 
-  let fullReply = '';
+  // 타이핑 인디케이터 (같은 에이전트 볼 때만)
+  if (isSameAgent()) {
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'msg assistant';
+    typingDiv.id = `typing-${agentId}`;
+    typingDiv.innerHTML = `<div class="msg-avatar" style="background:${agent.color}20;color:${agent.color}">${agent.name[0]}</div><div class="msg-bubble" id="typingBubble-${agentId}"><div class="typing"><span></span><span></span><span></span></div></div>`;
+    const msgContainer = document.getElementById('messages');
+    if (msgContainer) {
+      msgContainer.appendChild(typingDiv);
+      msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+  }
 
+  let fullReply = '';
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ system: agent.system, messages: history, apiKey: CLAUDE_KEY })
     });
-
     const data = await res.json();
-
-    if (!res.ok || data.error) {
-      fullReply = `오류: ${data.error || '알 수 없는 오류'}`;
-    } else {
-      fullReply = data.text || '';
-    }
-
-    const bubble = document.getElementById('streamingBubble');
-    if (bubble) bubble.innerHTML = renderMd(fullReply);
-
-    if (fullReply && !fullReply.startsWith('오류:')) {
-      const assistantMsg = { agent_id: agent.id, role: 'assistant', content: fullReply, created_at: new Date().toISOString() };
-      await sb.from('conversations').insert(assistantMsg);
-      conversations[agent.id].push(assistantMsg);
-      msgCounts[agent.id] = (msgCounts[agent.id] || 0) + 2;
-    }
-
+    fullReply = (!res.ok || data.error) ? `오류: ${data.error || '알 수 없는 오류'}` : (data.text || '');
   } catch(e) {
     fullReply = `네트워크 오류: ${e.message}`;
-    const bubble = document.getElementById('streamingBubble');
-    if (bubble) bubble.innerHTML = fullReply;
   }
 
-  // streamingMsg 제거 후 전체 메시지 다시 렌더링
-  const streamMsg = document.getElementById('streamingMsg');
-  if (streamMsg) streamMsg.remove();
-  renderMessages(agent);
+  // 응답 저장
+  if (fullReply && !fullReply.startsWith('오류:') && !fullReply.startsWith('네트워크')) {
+    const assistantMsg = { agent_id: agentId, role: 'assistant', content: fullReply, created_at: new Date().toISOString() };
+    await sb.from('conversations').insert(assistantMsg);
+    conversations[agentId].push(assistantMsg);
+    msgCounts[agentId] = (msgCounts[agentId] || 0) + 2;
+  }
 
-  // 답변 첫 줄이 화면 상단에 오도록
-  setTimeout(() => {
-    const m = document.getElementById('messages');
-    if (!m) return;
-    const allMsgs = m.querySelectorAll('.msg.assistant');
-    const lastAssistant = allMsgs[allMsgs.length - 1];
-    if (lastAssistant) m.scrollTop = lastAssistant.offsetTop - 16;
-  }, 80);
+  // 타이핑 인디케이터 제거 (어느 에이전트 보고 있든 해당 에이전트 것만 제거)
+  const typingEl = document.getElementById(`typing-${agentId}`);
+  if (typingEl) typingEl.remove();
+
+  // 현재 보고 있는 에이전트가 같을 때만 최종 렌더링
+  if (isSameAgent()) {
+    renderMessages(agent);
+    setTimeout(() => {
+      const m = document.getElementById('messages');
+      if (!m) return;
+      const assistantMsgs = m.querySelectorAll('.msg.assistant');
+      const last = assistantMsgs[assistantMsgs.length - 1];
+      if (last) m.scrollTop = last.offsetTop - 16;
+    }, 100);
+  }
 
   renderSidebar();
   isTyping = false;
-  document.getElementById('sendBtn').disabled = false;
+  // sendBtn은 현재 보고 있는 에이전트 창의 버튼만
+  const btn = document.getElementById('sendBtn');
+  if (btn) btn.disabled = false;
 }
 
 let isComposing = false;
