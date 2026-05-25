@@ -361,6 +361,9 @@ async function loadMessages(agent) {
   const { data } = await sb.from('conversations').select('*').eq('agent_id', agent.id).order('created_at', { ascending: true });
   conversations[agent.id] = data || [];
   renderMessages();
+  // 채팅창 처음 열 때는 맨 아래(최신 메시지)로
+  const m = document.getElementById('messages');
+  if (m) m.scrollTop = m.scrollHeight;
 }
 
 function renderMessages(agentOverride) {
@@ -383,7 +386,7 @@ function renderMessages(agentOverride) {
         <div class="msg-time">${new Date(msg.created_at).toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'})}</div>
       </div>
     </div>`).join('');
-  container.scrollTop = container.scrollHeight;
+  // 스크롤은 호출하는 쪽에서 제어 (여기서 하지 않음)
 }
 
 // 마크다운 렌더러
