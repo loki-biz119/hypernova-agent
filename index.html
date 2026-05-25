@@ -505,13 +505,13 @@ async function sendMessage() {
   conversations[currentAgent.id].push(userMsg);
   renderMessages();
 
+  // 내 메시지가 화면 상단에 오도록
   setTimeout(() => {
-    const m = document.getElementById("messages");
+    const m = document.getElementById('messages');
     if (!m) return;
-    const idx = conversations[currentAgent.id].length - 1;
-    const lastUserEl = document.getElementById('msg-' + idx);
-    if (lastUserEl) m.scrollTop = lastUserEl.offsetTop;
-    else m.scrollTop = m.scrollHeight;
+    const allMsgs = m.querySelectorAll('.msg');
+    const lastUserMsg = allMsgs[allMsgs.length - 1];
+    if (lastUserMsg) lastUserMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 50);
 
   const typingDiv = document.createElement('div');
@@ -567,15 +567,13 @@ async function sendMessage() {
   if (streamMsg) streamMsg.remove();
   renderMessages();
 
-  // 답변 첫 줄이 화면에 보이도록 스크롤
+  // 답변 첫 줄이 화면 상단에 오도록
   setTimeout(() => {
     const m = document.getElementById('messages');
     if (!m) return;
-    const msgs = m.querySelectorAll('.msg.assistant');
-    const lastAssistant = msgs[msgs.length - 1];
-    if (lastAssistant) {
-      lastAssistant.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    const allMsgs = m.querySelectorAll('.msg.assistant');
+    const lastAssistant = allMsgs[allMsgs.length - 1];
+    if (lastAssistant) lastAssistant.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 50);
 
   renderSidebar();
