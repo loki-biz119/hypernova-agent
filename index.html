@@ -562,12 +562,19 @@ async function sendMessage() {
     if (bubble) bubble.innerHTML = fullReply;
   }
 
-  // 답변 완료 후 답변 첫줄이 화면 상단에 오도록
+  // streamingMsg 제거 후 전체 메시지 다시 렌더링
+  const streamMsg = document.getElementById('streamingMsg');
+  if (streamMsg) streamMsg.remove();
+  renderMessages();
+
+  // 답변 첫 줄이 화면에 보이도록 스크롤
   setTimeout(() => {
     const m = document.getElementById('messages');
-    const streamMsg = document.getElementById('streamingMsg');
-    if (m && streamMsg) {
-      m.scrollTop = streamMsg.offsetTop;
+    if (!m) return;
+    const msgs = m.querySelectorAll('.msg.assistant');
+    const lastAssistant = msgs[msgs.length - 1];
+    if (lastAssistant) {
+      lastAssistant.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, 50);
 
