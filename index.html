@@ -73,13 +73,22 @@
   .typing span:nth-child(2) { animation-delay: 0.2s; }
   .typing span:nth-child(3) { animation-delay: 0.4s; }
   @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
-  .input-area { padding: 16px 24px; border-top: 0.5px solid var(--border); display: flex; gap: 10px; flex-shrink: 0; }
+  .input-area { padding: 12px 24px 16px; border-top: 0.5px solid var(--border); display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+  .input-row { display: flex; gap: 10px; align-items: flex-end; }
   .input-area textarea { flex: 1; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 12px; padding: 12px 16px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; resize: none; outline: none; min-height: 48px; max-height: 120px; line-height: 1.5; }
   .input-area textarea:focus { border-color: var(--accent); }
   .input-area textarea::placeholder { color: var(--muted); }
   .send-btn { width: 48px; height: 48px; border-radius: 12px; border: none; background: var(--accent); color: white; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: opacity 0.15s; flex-shrink: 0; }
   .send-btn:hover { opacity: 0.85; }
   .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .attach-btn { width: 48px; height: 48px; border-radius: 12px; border: 0.5px solid var(--border2); background: var(--bg3); color: var(--muted); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+  .attach-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .attach-preview { display: flex; flex-wrap: wrap; gap: 8px; }
+  .attach-item { display: flex; align-items: center; gap: 6px; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 8px; padding: 5px 10px; font-size: 12px; color: var(--muted); max-width: 200px; }
+  .attach-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .attach-item-img { width: 28px; height: 28px; border-radius: 4px; object-fit: cover; }
+  .attach-remove { cursor: pointer; opacity: 0.5; font-size: 14px; flex-shrink: 0; line-height: 1; }
+  .attach-remove:hover { opacity: 1; }
   .empty-chat { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
   .empty-chat-text { font-size: 14px; }
   ::-webkit-scrollbar { width: 4px; }
@@ -324,8 +333,13 @@ async function openChat(agent) {
       </div>
       <div class="messages" id="messages"></div>
       <div class="input-area">
-        <textarea id="msgInput" placeholder="${agent.name}에게 메시지를 입력하세요..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-        <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
+        <div class="attach-preview" id="attachPreview"></div>
+        <div class="input-row">
+          <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="파일 첨부">📎</button>
+          <input type="file" id="fileInput" style="display:none" multiple accept="image/*,.pdf,.txt,.md,.csv,.js,.html,.json" onchange="handleFileSelect(event)">
+          <textarea id="msgInput" placeholder="${agent.name}에게 메시지를 입력하세요..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+          <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
+        </div>
       </div>
     </div>`;
   await loadMessages(agent);
@@ -358,37 +372,105 @@ function renderMessages() {
   container.scrollTop = container.scrollHeight;
 }
 
+let attachedFiles = []; // { type: 'image'|'text', name, data, mediaType }
+
+async function handleFileSelect(event) {
+  const files = Array.from(event.target.files);
+  event.target.value = '';
+  for (const file of files) {
+    if (attachedFiles.length >= 5) { alert('첨부파일은 최대 5개까지 가능해요.'); break; }
+    if (file.size > 10 * 1024 * 1024) { alert(`${file.name}: 10MB 이하 파일만 가능해요.`); continue; }
+    if (file.type.startsWith('image/')) {
+      const b64 = await fileToBase64(file);
+      attachedFiles.push({ type: 'image', name: file.name, data: b64, mediaType: file.type });
+    } else {
+      const text = await file.text();
+      attachedFiles.push({ type: 'text', name: file.name, data: text });
+    }
+  }
+  renderAttachPreview();
+}
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function renderAttachPreview() {
+  const preview = document.getElementById('attachPreview');
+  if (!preview) return;
+  if (attachedFiles.length === 0) { preview.innerHTML = ''; return; }
+  preview.innerHTML = attachedFiles.map((f, i) => {
+    if (f.type === 'image') {
+      return `<div class="attach-item"><img class="attach-item-img" src="data:${f.mediaType};base64,${f.data}"><span>${f.name}</span><span class="attach-remove" onclick="removeAttach(${i})">✕</span></div>`;
+    }
+    return `<div class="attach-item">📄<span>${f.name}</span><span class="attach-remove" onclick="removeAttach(${i})">✕</span></div>`;
+  }).join('');
+}
+
+function removeAttach(i) {
+  attachedFiles.splice(i, 1);
+  renderAttachPreview();
+}
+
 async function sendMessage() {
   const input = document.getElementById('msgInput');
   const content = input.value.trim();
-  if (!content || isTyping) return;
+  if ((!content && attachedFiles.length === 0) || isTyping) return;
   isTyping = true;
   document.getElementById('sendBtn').disabled = true;
-  
-  // 입력창 비우기
+
   input.value = '';
   input.style.height = '48px';
 
-  const userMsg = { agent_id: currentAgent.id, role: 'user', content, created_at: new Date().toISOString() };
+  // 메시지 콘텐츠 구성 (멀티모달)
+  let userContent;
+  if (attachedFiles.length > 0) {
+    userContent = [];
+    // 이미지 먼저
+    for (const f of attachedFiles) {
+      if (f.type === 'image') {
+        userContent.push({ type: 'image', source: { type: 'base64', media_type: f.mediaType, data: f.data } });
+      }
+    }
+    // 텍스트 파일은 텍스트 블록으로
+    let textParts = content ? content + '\n\n' : '';
+    for (const f of attachedFiles) {
+      if (f.type === 'text') {
+        textParts += `[첨부파일: ${f.name}]\n\`\`\`\n${f.data.slice(0, 8000)}\n\`\`\`\n\n`;
+      }
+    }
+    if (textParts.trim()) userContent.push({ type: 'text', text: textParts.trim() });
+  } else {
+    userContent = content;
+  }
+
+  // DB 저장용 텍스트 (파일명만 표시)
+  const fileNames = attachedFiles.map(f => `[${f.name}]`).join(' ');
+  const displayContent = [content, fileNames].filter(Boolean).join(' ');
+
+  const filesSnapshot = [...attachedFiles];
+  attachedFiles = [];
+  renderAttachPreview();
+
+  const userMsg = { agent_id: currentAgent.id, role: 'user', content: displayContent, created_at: new Date().toISOString() };
   await sb.from('conversations').insert(userMsg);
   conversations[currentAgent.id].push(userMsg);
   renderMessages();
 
-  // 내 메시지가 화면 최상단에 오도록
   setTimeout(() => {
     const m = document.getElementById("messages");
     if (!m) return;
     const idx = conversations[currentAgent.id].length - 1;
     const lastUserEl = document.getElementById('msg-' + idx);
-    if (lastUserEl) {
-      m.scrollTop = lastUserEl.offsetTop;
-    } else {
-      m.scrollTop = m.scrollHeight;
-    }
+    if (lastUserEl) m.scrollTop = lastUserEl.offsetTop;
+    else m.scrollTop = m.scrollHeight;
   }, 50);
 
-  // 타이핑 인디케이터 추가
-  // 타이핑 인디케이터 (로딩 dots)
   const typingDiv = document.createElement('div');
   typingDiv.className = 'msg assistant';
   typingDiv.id = 'streamingMsg';
@@ -396,7 +478,13 @@ async function sendMessage() {
   document.getElementById('messages').appendChild(typingDiv);
   document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 
-  const history = conversations[currentAgent.id].slice(-20).map(m => ({ role: m.role, content: m.content }));
+  // 히스토리 구성 (마지막 메시지는 멀티모달 콘텐츠로 교체)
+  const history = conversations[currentAgent.id].slice(-20).map((m, idx, arr) => {
+    if (idx === arr.length - 1 && filesSnapshot.length > 0) {
+      return { role: 'user', content: userContent };
+    }
+    return { role: m.role, content: m.content };
+  });
 
   let fullReply = '';
 
@@ -414,10 +502,8 @@ async function sendMessage() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       const chunk = decoder.decode(value);
       const lines = chunk.split('\n');
-
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
@@ -428,7 +514,6 @@ async function sendMessage() {
               fullReply += parsed.text;
               if (bubble) {
                 bubble.innerHTML = fullReply.replace(/\n/g, '<br>');
-                // 스트리밍 중 자동 스크롤
                 const m = document.getElementById('messages');
                 if (m) m.scrollTop = m.scrollHeight;
               }
@@ -438,7 +523,6 @@ async function sendMessage() {
       }
     }
 
-    // 완료 후 DB 저장
     if (fullReply) {
       const assistantMsg = { agent_id: currentAgent.id, role: 'assistant', content: fullReply, created_at: new Date().toISOString() };
       await sb.from('conversations').insert(assistantMsg);
