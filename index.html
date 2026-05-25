@@ -297,8 +297,8 @@ function renderMessages() {
     container.innerHTML = `<div class="empty-chat"><div class="empty-chat-text">💬 ${currentAgent.name}와 대화를 시작하세요</div></div>`;
     return;
   }
-  container.innerHTML = msgs.map(msg => `
-    <div class="msg ${msg.role}">
+  container.innerHTML = msgs.map((msg, i) => `
+    <div class="msg ${msg.role}" id="msg-${i}">
       <div class="msg-avatar" style="${msg.role === 'assistant' ? `background:${currentAgent.color}20;color:${currentAgent.color}` : ''}">
         ${msg.role === 'user' ? 'KM' : currentAgent.name[0]}
       </div>
@@ -326,11 +326,18 @@ async function sendMessage() {
   conversations[currentAgent.id].push(userMsg);
   renderMessages();
 
-  // 내 메시지 전송 후 - 메시지 컨테이너 맨 아래로 (타이핑 인디케이터 보이게)
+  // 내 메시지가 화면 최상단에 오도록
   setTimeout(() => {
     const m = document.getElementById("messages");
-    if (m) m.scrollTop = m.scrollHeight;
-  }, 100);
+    if (!m) return;
+    const idx = conversations[currentAgent.id].length - 1;
+    const lastUserEl = document.getElementById('msg-' + idx);
+    if (lastUserEl) {
+      m.scrollTop = lastUserEl.offsetTop;
+    } else {
+      m.scrollTop = m.scrollHeight;
+    }
+  }, 50);
 
   // 타이핑 인디케이터 추가
   // 타이핑 인디케이터 (로딩 dots)
@@ -397,18 +404,14 @@ async function sendMessage() {
     if (bubble) bubble.innerHTML = fullReply;
   }
 
-  // 스트리밍 완료 후 - 답변 버블이 화면 상단에 오도록
+  // 답변 완료 후 답변 첫줄이 화면 상단에 오도록
   setTimeout(() => {
     const m = document.getElementById('messages');
     const streamMsg = document.getElementById('streamingMsg');
     if (m && streamMsg) {
-      // streamingMsg의 실제 위치를 messages 컨테이너 기준으로 계산
-      const msgRect = streamMsg.getBoundingClientRect();
-      const containerRect = m.getBoundingClientRect();
-      const relativeTop = msgRect.top - containerRect.top + m.scrollTop - 20;
-      m.scrollTop = relativeTop;
+      m.scrollTop = streamMsg.offsetTop;
     }
-  }, 200);
+  }, 50);
 
   renderSidebar();
   isTyping = false;
