@@ -379,7 +379,7 @@ async function handleFileSelect(event) {
   event.target.value = '';
   for (const file of files) {
     if (attachedFiles.length >= 5) { alert('첨부파일은 최대 5개까지 가능해요.'); break; }
-    if (file.size > 10 * 1024 * 1024) { alert(`${file.name}: 10MB 이하 파일만 가능해요.`); continue; }
+    if (file.size > 50 * 1024 * 1024) { alert(`${file.name}: 50MB 이하 파일만 가능해요.`); continue; }
     if (file.type.startsWith('image/')) {
       const b64 = await fileToBase64(file);
       attachedFiles.push({ type: 'image', name: file.name, data: b64, mediaType: file.type });
