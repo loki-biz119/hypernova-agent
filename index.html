@@ -363,18 +363,20 @@ async function loadMessages(agent) {
   renderMessages();
 }
 
-function renderMessages() {
+function renderMessages(agentOverride) {
   const container = document.getElementById('messages');
   if (!container) return;
-  const msgs = conversations[currentAgent.id] || [];
+  const ag = agentOverride || currentAgent;
+  if (!ag) return;
+  const msgs = conversations[ag.id] || [];
   if (msgs.length === 0) {
-    container.innerHTML = `<div class="empty-chat"><div class="empty-chat-text">💬 ${currentAgent.name}와 대화를 시작하세요</div></div>`;
+    container.innerHTML = `<div class="empty-chat"><div class="empty-chat-text">💬 ${ag.name}와 대화를 시작하세요</div></div>`;
     return;
   }
   container.innerHTML = msgs.map((msg, i) => `
     <div class="msg ${msg.role}" id="msg-${i}">
-      <div class="msg-avatar" style="${msg.role === 'assistant' ? `background:${currentAgent.color}20;color:${currentAgent.color}` : ''}">
-        ${msg.role === 'user' ? 'KM' : currentAgent.name[0]}
+      <div class="msg-avatar" style="${msg.role === 'assistant' ? `background:${ag.color}20;color:${ag.color}` : ''}">
+        ${msg.role === 'user' ? 'KM' : ag.name[0]}
       </div>
       <div>
         <div class="msg-bubble md">${msg.role==='assistant' ? renderMd(msg.content) : escHtml(msg.content).replace(/\n/g,'<br>')}</div>
@@ -467,6 +469,9 @@ async function sendMessage() {
   isTyping = true;
   document.getElementById('sendBtn').disabled = true;
 
+  // 함수 시작 시점에 에이전트 고정 (도중에 다른 에이전트 클릭해도 영향 없음)
+  const agent = currentAgent;
+
   input.value = '';
   input.style.height = '48px';
 
@@ -500,29 +505,29 @@ async function sendMessage() {
   attachedFiles = [];
   renderAttachPreview();
 
-  const userMsg = { agent_id: currentAgent.id, role: 'user', content: displayContent, created_at: new Date().toISOString() };
+  const userMsg = { agent_id: agent.id, role: 'user', content: displayContent, created_at: new Date().toISOString() };
   await sb.from('conversations').insert(userMsg);
-  conversations[currentAgent.id].push(userMsg);
-  renderMessages();
+  conversations[agent.id].push(userMsg);
+  renderMessages(agent);
 
   // 내 메시지가 화면 상단에 오도록
   setTimeout(() => {
     const m = document.getElementById('messages');
     if (!m) return;
-    const allMsgs = m.querySelectorAll('.msg');
+    const allMsgs = m.querySelectorAll('.msg.user');
     const lastUserMsg = allMsgs[allMsgs.length - 1];
-    if (lastUserMsg) lastUserMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 50);
+    if (lastUserMsg) m.scrollTop = lastUserMsg.offsetTop - 16;
+  }, 80);
 
   const typingDiv = document.createElement('div');
   typingDiv.className = 'msg assistant';
   typingDiv.id = 'streamingMsg';
-  typingDiv.innerHTML = `<div class="msg-avatar" style="background:${currentAgent.color}20;color:${currentAgent.color}">${currentAgent.name[0]}</div><div class="msg-bubble" id="streamingBubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  typingDiv.innerHTML = `<div class="msg-avatar" style="background:${agent.color}20;color:${agent.color}">${agent.name[0]}</div><div class="msg-bubble" id="streamingBubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
   document.getElementById('messages').appendChild(typingDiv);
   document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 
   // 히스토리 구성 (마지막 메시지는 멀티모달 콘텐츠로 교체)
-  const history = conversations[currentAgent.id].slice(-20).map((m, idx, arr) => {
+  const history = conversations[agent.id].slice(-20).map((m, idx, arr) => {
     if (idx === arr.length - 1 && filesSnapshot.length > 0) {
       return { role: 'user', content: userContent };
     }
@@ -535,7 +540,7 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: currentAgent.system, messages: history, apiKey: CLAUDE_KEY })
+      body: JSON.stringify({ system: agent.system, messages: history, apiKey: CLAUDE_KEY })
     });
 
     const data = await res.json();
@@ -550,10 +555,10 @@ async function sendMessage() {
     if (bubble) bubble.innerHTML = renderMd(fullReply);
 
     if (fullReply && !fullReply.startsWith('오류:')) {
-      const assistantMsg = { agent_id: currentAgent.id, role: 'assistant', content: fullReply, created_at: new Date().toISOString() };
+      const assistantMsg = { agent_id: agent.id, role: 'assistant', content: fullReply, created_at: new Date().toISOString() };
       await sb.from('conversations').insert(assistantMsg);
-      conversations[currentAgent.id].push(assistantMsg);
-      msgCounts[currentAgent.id] = (msgCounts[currentAgent.id] || 0) + 2;
+      conversations[agent.id].push(assistantMsg);
+      msgCounts[agent.id] = (msgCounts[agent.id] || 0) + 2;
     }
 
   } catch(e) {
@@ -565,7 +570,7 @@ async function sendMessage() {
   // streamingMsg 제거 후 전체 메시지 다시 렌더링
   const streamMsg = document.getElementById('streamingMsg');
   if (streamMsg) streamMsg.remove();
-  renderMessages();
+  renderMessages(agent);
 
   // 답변 첫 줄이 화면 상단에 오도록
   setTimeout(() => {
@@ -573,8 +578,8 @@ async function sendMessage() {
     if (!m) return;
     const allMsgs = m.querySelectorAll('.msg.assistant');
     const lastAssistant = allMsgs[allMsgs.length - 1];
-    if (lastAssistant) lastAssistant.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 50);
+    if (lastAssistant) m.scrollTop = lastAssistant.offsetTop - 16;
+  }, 80);
 
   renderSidebar();
   isTyping = false;
