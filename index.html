@@ -513,13 +513,13 @@ async function sendMessage() {
 
   if (isSameAgent()) {
     renderMessages(agent);
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       const m = document.getElementById('messages');
       if (!m) return;
       const userMsgs = m.querySelectorAll('.msg.user');
       const last = userMsgs[userMsgs.length - 1];
-      if (last) m.scrollTop = last.offsetTop - m.offsetTop - 16;
-    }, 100);
+      if (last) m.scrollTop = last.offsetTop;
+    });
   }
 
   // 히스토리 구성
@@ -571,13 +571,13 @@ async function sendMessage() {
   // 현재 보고 있는 에이전트가 같을 때만 최종 렌더링
   if (isSameAgent()) {
     renderMessages(agent);
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       const m = document.getElementById('messages');
       if (!m) return;
       const assistantMsgs = m.querySelectorAll('.msg.assistant');
       const last = assistantMsgs[assistantMsgs.length - 1];
-      if (last) m.scrollTop = last.offsetTop - m.offsetTop - 16;
-    }, 100);
+      if (last) m.scrollTop = last.offsetTop;
+    });
   }
 
   renderSidebar();
