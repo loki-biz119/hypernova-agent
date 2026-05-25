@@ -518,7 +518,7 @@ async function sendMessage() {
       if (!m) return;
       const userMsgs = m.querySelectorAll('.msg.user');
       const last = userMsgs[userMsgs.length - 1];
-      if (last) m.scrollTop = last.offsetTop - 16;
+      if (last) m.scrollTop = last.offsetTop - m.offsetTop - 16;
     }, 100);
   }
 
@@ -576,7 +576,7 @@ async function sendMessage() {
       if (!m) return;
       const assistantMsgs = m.querySelectorAll('.msg.assistant');
       const last = assistantMsgs[assistantMsgs.length - 1];
-      if (last) m.scrollTop = last.offsetTop - 16;
+      if (last) m.scrollTop = last.offsetTop - m.offsetTop - 16;
     }, 100);
   }
 
